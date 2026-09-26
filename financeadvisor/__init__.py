@@ -1,1 +1,1 @@
-"""Pacote raíz para o sistema multiagente de análise financeira."""
+"""Root package for the multi-agent financial analysis system."""

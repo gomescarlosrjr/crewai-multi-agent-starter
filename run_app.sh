@@ -1,17 +1,15 @@
 #!/bin/bash
-# Script para executar o Dividend Analyst Streamlit App
+# Script to run the Dividend Analyst Streamlit app
 
-echo "🚀 Iniciando Dividend Analyst..."
+echo "🚀 Starting Dividend Analyst..."
 echo ""
 
-# Ativa o ambiente virtual
+# Activate the virtual environment
 source .venv/bin/activate
 
-# Executa o Streamlit
+# Run Streamlit
 streamlit run streamlit_app.py
 
-# Mensagem de saída
+# Exit message
 echo ""
-echo "👋 App encerrado. Até logo!"
-
-
+echo "👋 App stopped. See you!"

@@ -1,3 +1,1 @@
-"""Componentes CrewAI (agentes, tarefas e ferramentas) para o sistema Finance Advisor."""
-
-
+"""CrewAI components (agents, tasks and tools) for the Finance Advisor system."""

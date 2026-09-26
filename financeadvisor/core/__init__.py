@@ -1,1 +1,1 @@
-"""Subpacote contendo a lógica de negócio central (ingestão de dados, cálculo de métricas e orquestração)."""
+"""Subpackage with the core business logic (data ingestion, metric computation and orchestration)."""

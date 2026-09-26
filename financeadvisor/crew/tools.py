@@ -1,6 +1,6 @@
 """
-Tools CrewAI que encapsulam integrações existentes (Redis cache e LLM).
-Essas ferramentas serão chamadas por Agents/Tasks CrewAI.
+CrewAI tools that wrap the existing integrations (Redis cache and LLM).
+These tools are called by CrewAI Agents/Tasks.
 """
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ from ..utils.cache import get_or_set_cache, get_redis_connection
 from ..utils.llm_client import generate_content
 
 try:
-    # Imports opcionais caso CrewAI não esteja instalado no ambiente do leitor
+    # Optional imports in case CrewAI is not installed in the reader's environment
     from crewai.tools import tool
-except Exception:  # pragma: no cover - fallback em ambientes sem crewai
+except Exception:  # pragma: no cover - fallback in environments without crewai
     def tool(*dargs, **dkwargs):  # type: ignore
-        # Suporta @tool e @tool("descricao")
+        # Supports @tool and @tool("description")
         if dargs and callable(dargs[0]) and len(dargs) == 1 and not dkwargs:
             func = dargs[0]
             return _make_fake_tool(func)
@@ -33,11 +33,12 @@ except Exception:  # pragma: no cover - fallback em ambientes sem crewai
         return FakeTool(func)
 
 
-@tool("Obtém valor do Redis ou calcula e armazena com TTL")
+@tool("Get a value from Redis or compute and store it with a TTL")
 def cache_get_or_compute(key: str, compute_prompt: str = "") -> str:
     """
-    Implementa o padrão cache-aside. Quando `compute_prompt` é fornecido,
-    gera o conteúdo via LLM e o armazena; caso contrário retorna o valor bruto.
+    Implements the cache-aside pattern. When `compute_prompt` is provided,
+    it generates the content via the LLM and stores it; otherwise it returns
+    the raw value.
     """
     def _compute() -> Any:
         if not compute_prompt:
@@ -51,119 +52,119 @@ def cache_get_or_compute(key: str, compute_prompt: str = "") -> str:
     return str(result)
 
 
-@tool("Lê string bruta de uma chave do Redis (sem JSON)")
+@tool("Read a raw string from a Redis key (no JSON)")
 def redis_get(key: str) -> str:
-    """Retorna o valor cru (string) de uma chave no Redis sem desserializar JSON."""
+    """Return the raw (string) value of a Redis key without deserializing JSON."""
     r = get_redis_connection()
     result = r.get(key)
     return result if result else ""
 
 
-@tool("Busca dados da API brapi.dev e salva no cache")
-def fetch_brapi_data_tool(ticker: str, periodo: str) -> str:
-    """Busca dados brutos da brapi.dev e salva no Redis. Retorna mensagem de sucesso."""
+@tool("Fetch data from the brapi.dev API and save it to the cache")
+def fetch_brapi_data_tool(ticker: str, period: str) -> str:
+    """Fetch raw data from brapi.dev and save it to Redis. Returns a success message."""
     from ..core.data_loader import fetch_brapi_data
     import json
-    
-    data = fetch_brapi_data(ticker, periodo)
-    
-    # Salva no Redis
+
+    data = fetch_brapi_data(ticker, period)
+
+    # Save to Redis
     r = get_redis_connection()
-    cache_key = f"rawdata:{ticker}:{periodo}"
+    cache_key = f"rawdata:{ticker}:{period}"
     r.set(cache_key, json.dumps(data, ensure_ascii=False), ex=86400)
-    
-    return f"Dados de {ticker} ({periodo}) salvos com sucesso no cache. Use a chave: {cache_key}"
+
+    return f"Data for {ticker} ({period}) saved to the cache successfully. Use the key: {cache_key}"
 
 
-@tool("Calcula métricas de dividendos lendo do cache")
-def calc_dividend_metrics_tool(ticker: str, periodo: str) -> str:
-    """Lê dados do cache e calcula dividend yield e outras métricas de dividendos."""
+@tool("Compute dividend metrics by reading from the cache")
+def calc_dividend_metrics_tool(ticker: str, period: str) -> str:
+    """Read data from the cache and compute the dividend yield and other dividend metrics."""
     from ..core.metrics_calculator import calc_metrics_from_raw
     import json
-    
-    # Lê do Redis
+
+    # Read from Redis
     r = get_redis_connection()
-    cache_key = f"rawdata:{ticker}:{periodo}"
+    cache_key = f"rawdata:{ticker}:{period}"
     cached_data = r.get(cache_key)
-    
+
     if not cached_data:
-        return json.dumps({"error": f"Dados não encontrados no cache para {ticker} {periodo}"})
-    
+        return json.dumps({"error": f"Data not found in cache for {ticker} {period}"})
+
     data = json.loads(cached_data)
     metrics = calc_metrics_from_raw(data)
-    
-    # Salva métricas no cache também
-    metrics_key = f"metrics:{ticker}:{periodo}"
+
+    # Save metrics to the cache too
+    metrics_key = f"metrics:{ticker}:{period}"
     r.set(metrics_key, json.dumps(metrics, ensure_ascii=False), ex=86400)
-    
+
     return json.dumps(metrics, ensure_ascii=False)
 
 
-@tool("Lê métricas de dividendos do cache")
-def get_metrics_from_cache(ticker: str, periodo: str) -> str:
-    """Recupera métricas de dividendos já calculadas do cache."""
+@tool("Read dividend metrics from the cache")
+def get_metrics_from_cache(ticker: str, period: str) -> str:
+    """Retrieve already-computed dividend metrics from the cache."""
     import json
-    
+
     r = get_redis_connection()
-    metrics_key = f"metrics:{ticker}:{periodo}"
+    metrics_key = f"metrics:{ticker}:{period}"
     cached_metrics = r.get(metrics_key)
-    
+
     if not cached_metrics:
-        return json.dumps({"error": f"Métricas não encontradas no cache para {ticker} {periodo}"})
-    
+        return json.dumps({"error": f"Metrics not found in cache for {ticker} {period}"})
+
     return cached_metrics
 
 
-@tool("Compara e rankeia tickers por dividend yield")
-def rank_tickers_by_dividend_yield(tickers_list: str, periodo: str) -> str:
+@tool("Compare and rank tickers by dividend yield")
+def rank_tickers_by_dividend_yield(tickers_list: str, period: str) -> str:
     """
-    Compara múltiplos tickers e retorna um ranking ordenado por dividend yield.
-    
+    Compare multiple tickers and return a ranking ordered by dividend yield.
+
     Args:
-        tickers_list: String com tickers separados por vírgula (ex: "PETR4,VALE3,ITUB4,BBDC4")
-        periodo: Período de análise
-    
+        tickers_list: String with comma-separated tickers (e.g. "PETR4,VALE3,ITUB4,BBDC4")
+        period: Analysis period
+
     Returns:
-        JSON string com ranking ordenado por dividend yield (maior para menor)
+        JSON string with a ranking ordered by dividend yield (highest to lowest)
     """
     import json
-    
+
     tickers = [t.strip() for t in tickers_list.split(",")]
     r = get_redis_connection()
-    
+
     ranking = []
     for ticker in tickers:
-        metrics_key = f"metrics:{ticker}:{periodo}"
+        metrics_key = f"metrics:{ticker}:{period}"
         cached_metrics = r.get(metrics_key)
-        
+
         if cached_metrics:
             metrics = json.loads(cached_metrics)
             ranking.append({
                 "ticker": ticker,
                 "dividend_yield": metrics.get("dividend_yield", 0),
-                "preco_atual": metrics.get("preco_atual", 0),
-                "dividendos_12m": metrics.get("dividendos_12m", 0),
-                "quantidade_pagamentos": int(metrics.get("quantidade_pagamentos", 0)),
-                "recomendacao": "COMPRAR" if metrics.get("dividend_yield", 0) > 7.0 else "MANTER"
+                "current_price": metrics.get("current_price", 0),
+                "dividends_12m": metrics.get("dividends_12m", 0),
+                "payment_count": int(metrics.get("payment_count", 0)),
+                "recommendation": "BUY" if metrics.get("dividend_yield", 0) > 7.0 else "HOLD"
             })
-    
-    # Ordena por dividend yield (maior primeiro)
+
+    # Sort by dividend yield (highest first)
     ranking.sort(key=lambda x: x["dividend_yield"], reverse=True)
-    
+
     return json.dumps(ranking, ensure_ascii=False, indent=2)
 
 
-@tool("Gera PDF com análise de dividendos")
-def generate_dividend_pdf(content: str, output_filename: str = "analise_dividendos.pdf") -> str:
+@tool("Generate a PDF with the dividend analysis")
+def generate_dividend_pdf(content: str, output_filename: str = "dividend_analysis.pdf") -> str:
     """
-    Gera um PDF profissional com a análise de dividendos.
-    
+    Generate a professional PDF with the dividend analysis.
+
     Args:
-        content: Conteúdo em texto para incluir no PDF
-        output_filename: Nome do arquivo PDF a ser gerado
-    
+        content: Text content to include in the PDF
+        output_filename: Name of the PDF file to generate
+
     Returns:
-        Caminho completo do arquivo PDF gerado
+        Full path of the generated PDF file
     """
     import json
     import os
@@ -174,19 +175,19 @@ def generate_dividend_pdf(content: str, output_filename: str = "analise_dividend
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
-    
-    # Cria diretório de saída se não existir
+
+    # Create the output directory if it doesn't exist
     output_dir = os.path.join(os.getcwd(), "reports")
     os.makedirs(output_dir, exist_ok=True)
-    
+
     output_path = os.path.join(output_dir, output_filename)
-    
-    # Cria o documento
+
+    # Create the document
     doc = SimpleDocTemplate(output_path, pagesize=A4,
                             rightMargin=2*cm, leftMargin=2*cm,
                             topMargin=2*cm, bottomMargin=2*cm)
-    
-    # Estilos
+
+    # Styles
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         'CustomTitle',
@@ -196,7 +197,7 @@ def generate_dividend_pdf(content: str, output_filename: str = "analise_dividend
         spaceAfter=30,
         alignment=TA_CENTER
     )
-    
+
     heading_style = ParagraphStyle(
         'CustomHeading',
         parent=styles['Heading2'],
@@ -205,7 +206,7 @@ def generate_dividend_pdf(content: str, output_filename: str = "analise_dividend
         spaceAfter=12,
         spaceBefore=12
     )
-    
+
     normal_style = ParagraphStyle(
         'CustomNormal',
         parent=styles['Normal'],
@@ -213,43 +214,43 @@ def generate_dividend_pdf(content: str, output_filename: str = "analise_dividend
         alignment=TA_JUSTIFY,
         spaceAfter=12
     )
-    
-    # Elementos do documento
+
+    # Document elements
     story = []
-    
-    # Título
-    story.append(Paragraph("Análise de Dividendos", title_style))
-    story.append(Paragraph(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 
+
+    # Title
+    story.append(Paragraph("Dividend Analysis", title_style))
+    story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
                           styles['Normal']))
     story.append(Spacer(1, 0.5*cm))
-    
-    # Tenta parsear o conteúdo como JSON (ranking)
+
+    # Try to parse the content as JSON (ranking)
     try:
         ranking = json.loads(content)
         if isinstance(ranking, list) and ranking:
-            # Cria tabela com o ranking
-            story.append(Paragraph("Ranking de Ações por Dividend Yield", heading_style))
+            # Build a table with the ranking
+            story.append(Paragraph("Stock Ranking by Dividend Yield", heading_style))
             story.append(Spacer(1, 0.3*cm))
-            
-            # Cabeçalho da tabela
+
+            # Table header
             table_data = [[
-                "Posição", "Ticker", "Dividend Yield", "Preço Atual", 
-                "Dividendos 12M", "Pagamentos", "Recomendação"
+                "Rank", "Ticker", "Dividend Yield", "Current Price",
+                "Dividends 12M", "Payments", "Recommendation"
             ]]
-            
-            # Dados da tabela
+
+            # Table rows
             for idx, item in enumerate(ranking, 1):
                 table_data.append([
                     str(idx),
                     item.get("ticker", ""),
                     f"{item.get('dividend_yield', 0):.2f}%",
-                    f"R$ {item.get('preco_atual', 0):.2f}",
-                    f"R$ {item.get('dividendos_12m', 0):.2f}",
-                    str(item.get('quantidade_pagamentos', 0)),
-                    item.get('recomendacao', '')
+                    f"R$ {item.get('current_price', 0):.2f}",
+                    f"R$ {item.get('dividends_12m', 0):.2f}",
+                    str(item.get('payment_count', 0)),
+                    item.get('recommendation', '')
                 ])
-            
-            # Cria e estiliza a tabela
+
+            # Create and style the table
             t = Table(table_data, colWidths=[1.5*cm, 2*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2*cm, 2.5*cm])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a5490')),
@@ -264,40 +265,38 @@ def generate_dividend_pdf(content: str, output_filename: str = "analise_dividend
                 ('FONTSIZE', (0, 1), (-1, -1), 9),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ]))
-            
+
             story.append(t)
             story.append(Spacer(1, 0.5*cm))
-            
-            # Destaque para a melhor opção
+
+            # Highlight the best option
             best = ranking[0]
-            story.append(Paragraph("🏆 Melhor Oportunidade", heading_style))
+            story.append(Paragraph("🏆 Best Opportunity", heading_style))
             best_text = f"""
-            O ticker <b>{best.get('ticker', '')}</b> apresenta o melhor dividend yield 
-            de <b>{best.get('dividend_yield', 0):.2f}%</b> ao ano, com preço atual de 
-            R$ {best.get('preco_atual', 0):.2f} e {best.get('quantidade_pagamentos', 0)} 
-            pagamentos nos últimos 12 meses, totalizando R$ {best.get('dividendos_12m', 0):.2f} 
-            em dividendos.
+            The ticker <b>{best.get('ticker', '')}</b> has the best dividend yield
+            of <b>{best.get('dividend_yield', 0):.2f}%</b> per year, with a current price of
+            R$ {best.get('current_price', 0):.2f} and {best.get('payment_count', 0)}
+            payments over the last 12 months, totaling R$ {best.get('dividends_12m', 0):.2f}
+            in dividends.
             """
             story.append(Paragraph(best_text, normal_style))
-            
+
     except json.JSONDecodeError:
-        # Se não for JSON, trata como texto livre
+        # If it's not JSON, treat it as free text
         paragraphs = content.split('\n\n')
         for para in paragraphs:
             if para.strip():
                 story.append(Paragraph(para.strip(), normal_style))
                 story.append(Spacer(1, 0.3*cm))
-    
-    # Rodapé
+
+    # Footer
     story.append(Spacer(1, 1*cm))
     story.append(Paragraph(
-        "<i>Relatório gerado automaticamente pelo Finance Advisor - Dividend Analyst</i>",
+        "<i>Report generated automatically by Finance Advisor - Dividend Analyst</i>",
         styles['Normal']
     ))
-    
-    # Gera o PDF
+
+    # Build the PDF
     doc.build(story)
-    
-    return f"PDF gerado com sucesso: {output_path}"
 
-
+    return f"PDF generated successfully: {output_path}"

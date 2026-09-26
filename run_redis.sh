@@ -1,39 +1,39 @@
 #!/bin/bash
-# Script para subir o Redis usando Docker Compose
+# Script to start Redis using Docker Compose
 
-echo "🔴 Iniciando Redis..."
+echo "🔴 Starting Redis..."
 echo ""
 
-# Verifica se o Docker está rodando
+# Check whether Docker is running
 if ! docker info > /dev/null 2>&1; then
-    echo "❌ Docker não está rodando. Por favor, inicie o Docker primeiro."
+    echo "❌ Docker is not running. Please start Docker first."
     exit 1
 fi
 
-# Para o Redis se já estiver rodando
-echo "🛑 Parando Redis existente (se houver)..."
+# Stop Redis if it's already running
+echo "🛑 Stopping existing Redis (if any)..."
 docker-compose down redis
 
-# Sobe o Redis
-echo "🚀 Subindo Redis..."
+# Start Redis
+echo "🚀 Bringing Redis up..."
 docker-compose up -d redis
 
-# Verifica se o Redis subiu corretamente
+# Check whether Redis came up correctly
 sleep 2
 if docker ps | grep -q redis; then
     echo ""
-    echo "✅ Redis está rodando!"
-    echo "📍 Porta: 6379"
+    echo "✅ Redis is running!"
+    echo "📍 Port: 6379"
     echo "🔗 Host: localhost"
     echo ""
-    echo "Para parar o Redis, execute:"
+    echo "To stop Redis, run:"
     echo "  docker-compose down redis"
     echo ""
-    echo "Para ver os logs do Redis:"
+    echo "To view Redis logs:"
     echo "  docker-compose logs -f redis"
 else
     echo ""
-    echo "❌ Erro ao subir o Redis. Verifique os logs:"
+    echo "❌ Failed to start Redis. Check the logs:"
     echo "  docker-compose logs redis"
     exit 1
 fi

@@ -1,24 +1,24 @@
 # CrewAI Multi-Agent Starter
 
-Exemplo didático de um **sistema multi-agente** com **CrewAI**, que faz análise comparativa de **dividendos de ações brasileiras (B3)**: coleta dados reais, calcula métricas, gera insights com LLM (Gemini ou OpenAI), ranqueia as ações e produz um **relatório PDF**. Interface web em **Streamlit** e cache em **Redis**. Feito para **estudar, forkar e estender**.
+An educational **multi-agent system** built with **CrewAI** that performs comparative **dividend analysis of Brazilian stocks (B3)**: it fetches real data, computes metrics, generates insights with an LLM (Gemini or OpenAI), ranks the stocks, and produces a **PDF report**. Web UI in **Streamlit**, caching in **Redis**. Made to **study, fork, and extend**.
 
-> Projeto de estudo. Não é recomendação de investimento.
+> Study project. Not investment advice.
 
-## O que você aprende aqui
+## What you learn here
 
-- **Arquitetura multi-agente** com CrewAI: `Agent`, `Task`, `Crew` e ferramentas (tools).
-- **Separação de camadas**: `core/` (dados e métricas), `crew/` (agentes e tools), `utils/` (cache, cliente LLM).
-- **Integração com API real** (brapi.dev / B3) e **cálculo de métricas** financeiras.
-- **LLM plugável** (Gemini ou OpenAI) atrás de uma única configuração.
-- **Cache com Redis** para evitar chamadas redundantes (e rate limiting).
-- **Geração de PDF** com ReportLab e **UI** com Streamlit.
+- **Multi-agent architecture** with CrewAI: `Agent`, `Task`, `Crew`, and tools.
+- **Layered design**: `core/` (data and metrics), `crew/` (agents and tools), `utils/` (cache, LLM client).
+- **Integration with a real API** (brapi.dev / B3) and **financial metric** computation.
+- **Pluggable LLM** (Gemini or OpenAI) behind a single configuration.
+- **Caching with Redis** to avoid redundant calls (and rate limiting).
+- **PDF generation** with ReportLab and a **UI** with Streamlit.
 
-## Pré-requisitos
+## Prerequisites
 
-- Python 3.11+ (recomendado 3.12)
-- **Docker** (para o Redis)
-- Uma chave de LLM: **Gemini** (grátis em https://aistudio.google.com/app/apikey) **ou** OpenAI
-- (Opcional) Token da **brapi.dev** para evitar limites
+- Python 3.11+ (3.12 recommended)
+- **Docker** (for Redis)
+- An LLM key: **Gemini** (free at https://aistudio.google.com/app/apikey) **or** OpenAI
+- (Optional) a **brapi.dev** token to avoid rate limits
 
 ## Setup
 
@@ -28,62 +28,62 @@ source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install -r financeadvisor/requirements.txt
 
 cp .env.example .env
-# edite .env: coloque GEMINI_API_KEY (ou OPENAI_API_KEY) e, opcionalmente, BRAPI_TOKEN
+# edit .env: set GEMINI_API_KEY (or OPENAI_API_KEY) and, optionally, BRAPI_TOKEN
 ```
 
-## Rodar
+## Run
 
-**1. Suba o Redis** (cache):
+**1. Start Redis** (cache):
 ```bash
-bash run_redis.sh          # usa docker-compose (redis:7 na porta 6379)
+bash run_redis.sh          # uses docker-compose (redis:7 on port 6379)
 ```
 
-**2a. Interface web (Streamlit):**
+**2a. Web UI (Streamlit):**
 ```bash
-bash run_app.sh            # ou: streamlit run streamlit_app.py
+bash run_app.sh            # or: streamlit run streamlit_app.py
 ```
 
-**2b. Uso programático (CLI):**
+**2b. Programmatic use (CLI):**
 ```bash
 python -m financeadvisor.main
 ```
 
-## Estrutura
+## Structure
 
 ```
 .
-├── streamlit_app.py            # interface web
+├── streamlit_app.py            # web UI
 ├── docker-compose.yaml         # Redis
-├── run_app.sh / run_redis.sh   # atalhos
+├── run_app.sh / run_redis.sh   # shortcuts
 ├── .env.example
 └── financeadvisor/
-    ├── main.py                 # entrada programática (carteiras de exemplo)
+    ├── main.py                 # programmatic entry point (example portfolios)
     ├── core/
-    │   ├── data_loader.py      # coleta dados da B3 (brapi.dev)
+    │   ├── data_loader.py      # fetches B3 data (brapi.dev)
     │   ├── metrics_calculator.py
-    │   └── orchestrator.py     # orquestra a análise multi-ticker
+    │   └── orchestrator.py     # orchestrates the multi-ticker analysis
     ├── crew/
-    │   ├── crew.py             # define Agents/Tasks/Crew (CrewAI) + escolha do LLM
-    │   └── tools.py            # ferramentas: fetch, métricas, ranking, PDF
+    │   ├── crew.py             # defines Agents/Tasks/Crew (CrewAI) + LLM choice
+    │   └── tools.py            # tools: fetch, metrics, ranking, PDF
     └── utils/
-        ├── cache.py            # cache Redis
-        └── llm_client.py       # cliente LLM (Gemini/OpenAI)
+        ├── cache.py            # Redis cache
+        └── llm_client.py       # LLM client (Gemini/OpenAI)
 ```
 
-## Como os agentes trabalham
+## How the agents work
 
-`orchestrator` coordena o fluxo; a `Crew` (CrewAI) combina agentes especializados —
-coleta de dados → cálculo de métricas → geração de insights → recomendação/ranking —
-usando as tools de `crew/tools.py`. O LLM é escolhido em `crew/crew.py` (`get_llm("gemini"|"openai")`).
+`orchestrator` coordinates the flow; the `Crew` (CrewAI) combines specialized agents —
+data fetching → metric computation → insight generation → recommendation/ranking —
+using the tools in `crew/tools.py`. The LLM is selected in `crew/crew.py` (`get_llm("gemini"|"openai")`).
 
-## Exercícios para estender (sugestões do mentor)
+## Exercises to extend (mentor suggestions)
 
-1. **Novo agente**: um "analista de risco" que penaliza volatilidade alta no ranking.
-2. **Nova métrica** em `metrics_calculator.py` (ex.: payout ratio) e use-a no insight.
-3. **Trocar o provider** de LLM e comparar qualidade/custo dos insights.
-4. **Persistir resultados** no Qdrant (já previsto no `.env.example`) e permitir busca semântica de análises passadas.
-5. **Testes**: cobrir `metrics_calculator` e `cache` com pytest (sem chamar a API real — use mocks).
+1. **New agent**: a "risk analyst" that penalizes high volatility in the ranking.
+2. **New metric** in `metrics_calculator.py` (e.g. payout ratio) and use it in the insight.
+3. **Switch the LLM provider** and compare insight quality/cost.
+4. **Persist results** in Qdrant (already scaffolded in `.env.example`) and enable semantic search over past analyses.
+5. **Tests**: cover `metrics_calculator` and `cache` with pytest (no real API calls — use mocks).
 
-## Segurança
+## Security
 
-Nunca faça commit do `.env` (já está no `.gitignore`). Chaves de API e tokens ficam só no seu ambiente.
+Never commit the `.env` (it's already in `.gitignore`). API keys and tokens live only in your environment.

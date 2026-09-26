@@ -1,25 +1,22 @@
 """
-Utilitários de cache e limitação de taxa usando Redis.
+Cache and rate-limiting utilities using Redis.
 
-Este módulo fornece funções para obter uma conexão com Redis, armazenar e
-recuperar valores de cache, e implementar um simples controle de taxa
-(rate limiting) por usuário.  O Redis funciona como um banco de dados
-em memória extremamente rápido; ele suporta operações atômicas como
-incremento de contadores e possui tipos de dados variados (strings,
-listas, conjuntos, etc.).  Aqui usamos strings para armazenar
-resultados serializados e contadores para controle de taxa.
+This module provides functions to get a Redis connection, store and retrieve
+cached values, and implement a simple per-user rate limit. Redis works as an
+extremely fast in-memory database; it supports atomic operations such as counter
+increments and has various data types (strings, lists, sets, etc.). Here we use
+strings to store serialized results and counters for rate limiting.
 
-Exemplo de uso:
+Usage example:
 
 >>> from utils.cache import get_or_set_cache
->>> result = get_or_set_cache('metrics:PETR4:1y', lambda: calcula_metricas())
+>>> result = get_or_set_cache('metrics:PETR4:1y', lambda: compute_metrics())
 
-Isso tenta recuperar a chave no Redis; se não existir, chama
-`calcula_metricas()` e armazena o valor com TTL definido.
+This tries to retrieve the key from Redis; if it doesn't exist, it calls
+`compute_metrics()` and stores the value with a defined TTL.
 
-Nota: Para usar este módulo, certifique‑se de que um servidor Redis
-esteja acessível e que as variáveis REDIS_HOST e REDIS_PORT estejam
-definidas no arquivo `.env`.
+Note: To use this module, make sure a Redis server is reachable and that the
+REDIS_HOST and REDIS_PORT variables are set in the `.env` file.
 """
 import json
 import os
@@ -34,8 +31,8 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    # Fallback: se python-dotenv não estiver disponível, as variáveis
-    # de ambiente devem estar definidas externamente.
+    # Fallback: if python-dotenv is not available, the environment
+    # variables must be set externally.
     pass
 
 
@@ -79,10 +76,10 @@ _in_memory_singleton = InMemoryRedis()
 
 
 def get_redis_connection():
-    """Obtém uma conexão Redis ou fallback em memória se FAKE_CACHE=1 ou sem redis.
+    """Get a Redis connection, or an in-memory fallback if FAKE_CACHE=1 or redis is missing.
 
-    Retorna:
-        objeto compatível com Redis (get, set, incr, expire).
+    Returns:
+        an object compatible with Redis (get, set, incr, expire).
     """
     if os.getenv("FAKE_CACHE") == "1" or redis is None:
         return _in_memory_singleton
@@ -92,66 +89,64 @@ def get_redis_connection():
 
 
 def get_or_set_cache(key: str, func: Callable[[], Any], ttl: int = 86400) -> Any:
-    """Obtém um valor do cache ou calcula e armazena se ausente.
+    """Get a value from the cache, or compute and store it if absent.
 
-    Este padrão é conhecido como *cache aside*: primeiro tenta ler o valor
-    do cache; se não existir, executa a função fornecida, armazena o
-    resultado com um tempo de vida (TTL) e retorna o valor.
+    This pattern is known as *cache aside*: it first tries to read the value
+    from the cache; if it doesn't exist, it runs the provided function, stores
+    the result with a time-to-live (TTL) and returns the value.
 
     Args:
-        key (str): chave no Redis.
-        func (Callable[[], Any]): função que gera o valor se a chave
-            não existir.
-        ttl (int, opcional): tempo em segundos para expiração.  Padrão 24h.
+        key (str): Redis key.
+        func (Callable[[], Any]): function that generates the value if the key
+            doesn't exist.
+        ttl (int, optional): expiration time in seconds. Default 24h.
 
     Returns:
-        Any: o valor obtido ou calculado.
+        Any: the retrieved or computed value.
     """
     r = get_redis_connection()
     value = r.get(key)
     if value is not None:
         try:
-            # Tenta desserializar JSON; se falhar, retorna string
+            # Try to deserialize JSON; if it fails, return the string
             return json.loads(value)
         except json.JSONDecodeError:
             return value
 
-    # Valor não encontrado; calcula e armazena
+    # Value not found; compute and store it
     result = func()
     try:
         serialized = json.dumps(result)
     except (TypeError, ValueError):
-        # Se não serializável em JSON, armazena como string
+        # If not JSON-serializable, store it as a string
         serialized = str(result)
     r.set(key, serialized, ex=ttl)
     return result
 
 
 def check_rate_limit(user_id: str, limit: int = 5, window: int = 60) -> None:
-    """Aplica limitação de taxa para chamadas do usuário.
+    """Apply rate limiting to a user's calls.
 
-    Incrementa um contador no Redis com chave composta por usuário e
-    janela de tempo.  Se o contador exceder o limite, lança uma
-    exceção.  A chave expira automaticamente ao final da janela para
-    reiniciar a contagem.
+    Increments a Redis counter keyed by user and time window. If the counter
+    exceeds the limit, it raises an exception. The key expires automatically at
+    the end of the window to reset the count.
 
     Args:
-        user_id (str): identificador único do usuário (pode ser ID de
-            sessão ou endereço IP).
-        limit (int): número máximo de chamadas permitidas na janela.
-        window (int): tamanho da janela em segundos (padrão 1 minuto).
+        user_id (str): unique user identifier (may be a session ID or IP address).
+        limit (int): maximum number of calls allowed in the window.
+        window (int): window size in seconds (default 1 minute).
 
     Raises:
-        Exception: se o limite for excedido.
+        Exception: if the limit is exceeded.
     """
     r = get_redis_connection()
     current_window = int(time.time() // window)
     key = f"rate:{user_id}:{current_window}"
     count = r.incr(key)
     if count == 1:
-        # Define expiração apenas na primeira chamada da janela
+        # Set expiration only on the first call of the window
         r.expire(key, window)
     if count > limit:
         raise Exception(
-            "Você excedeu o número máximo de requisições permitidas. Tente novamente mais tarde."
+            "You have exceeded the maximum number of allowed requests. Please try again later."
         )

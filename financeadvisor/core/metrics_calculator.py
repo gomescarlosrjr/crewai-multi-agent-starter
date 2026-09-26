@@ -1,16 +1,14 @@
 """
-Agente de cálculo de métricas financeiras.
+Financial metrics computation agent.
 
-Este módulo define funções para calcular indicadores quantitativos a
-partir dos dados brutos obtidos da brapi.dev.  Na arquitetura
-proposta, essas funções são utilizadas pelo worker de métricas
-(`workers/metrics_worker.py`), mas podem ser chamadas em outros
-contextos (por exemplo, para testes manuais).
+This module defines functions to compute quantitative indicators from the raw
+data fetched from brapi.dev. In the proposed architecture these functions are
+used by the metrics worker (`workers/metrics_worker.py`), but they can be
+called in other contexts (for example, for manual testing).
 
-As métricas implementadas são meramente ilustrativas: retorno médio e
-volatilidade sobre uma série de preços de fechamento.  Você pode
-adicionar outras métricas (CAGR, margem bruta, ROE, etc.) conforme
-necessário.  O resultado é armazenado no Redis para reaproveitamento.
+The implemented metrics are illustrative: dividend yield and related figures
+over a series of dividend payments. You can add other metrics (CAGR, gross
+margin, ROE, etc.) as needed. The result is stored in Redis for reuse.
 """
 from typing import Any, Dict, List
 from datetime import datetime, timedelta
@@ -26,13 +24,13 @@ from ..utils.cache import get_redis_connection
 
 
 def _extract_dividends(brapi_result: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Extrai dados de dividendos do resultado da brapi.
-    
+    """Extract dividend data from the brapi result.
+
     Args:
-        brapi_result: resultado da API brapi contendo dividendsData
-        
+        brapi_result: brapi API result containing dividendsData
+
     Returns:
-        Lista de dividendos pagos (cashDividends)
+        List of paid dividends (cashDividends)
     """
     dividends_data = brapi_result.get("dividendsData", {})
     cash_dividends = dividends_data.get("cashDividends", [])
@@ -40,98 +38,98 @@ def _extract_dividends(brapi_result: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _calculate_dividend_yield(brapi_result: Dict[str, Any]) -> float:
-    """Calcula o dividend yield anual baseado nos últimos 12 meses.
-    
+    """Compute the annual dividend yield based on the last 12 months.
+
     Args:
-        brapi_result: resultado da API brapi
-        
+        brapi_result: brapi API result
+
     Returns:
-        Dividend yield anual em percentual (ex: 7.5 para 7.5%)
+        Annual dividend yield as a percentage (e.g. 7.5 for 7.5%)
     """
     from datetime import timezone
-    
-    # Obtém o preço atual
+
+    # Get the current price
     current_price = brapi_result.get("regularMarketPrice")
     if not current_price or current_price <= 0:
         return 0.0
-    
-    # Obtém os dividendos
+
+    # Get the dividends
     dividends = _extract_dividends(brapi_result)
     if not dividends:
         return 0.0
-    
-    # Filtra dividendos dos últimos 12 meses (timezone-aware)
+
+    # Filter dividends from the last 12 months (timezone-aware)
     now = datetime.now(timezone.utc)
     one_year_ago = now - timedelta(days=365)
-    
+
     total_dividends = 0.0
     for div in dividends:
         payment_date_str = div.get("paymentDate")
         if not payment_date_str:
             continue
-            
+
         try:
             # Parse ISO format: "2025-09-22T00:00:00.000Z"
             payment_date = datetime.fromisoformat(payment_date_str.replace("Z", "+00:00"))
-            
-            # Se o pagamento foi nos últimos 12 meses
+
+            # If the payment was within the last 12 months
             if payment_date >= one_year_ago and payment_date <= now:
                 rate = div.get("rate", 0)
                 if rate:
                     total_dividends += float(rate)
         except Exception:
-            # Ignora dividendos com data inválida
+            # Ignore dividends with an invalid date
             continue
-    
-    # Calcula dividend yield: (dividendos anuais / preço) * 100
+
+    # Compute dividend yield: (annual dividends / price) * 100
     dividend_yield = (total_dividends / current_price) * 100
     return round(dividend_yield, 2)
 
 
 def calc_metrics_from_raw(data_json: Dict[str, Any]) -> Dict[str, float]:
-    """Calcula métricas simples a partir do JSON da brapi.
+    """Compute simple metrics from the brapi JSON.
 
     Args:
-        data_json (dict): resposta JSON da brapi contendo `results[0]` com
-            campo `historicalDataPrice` (lista de objetos com 'close') e
-            dados de dividendos.
+        data_json (dict): brapi JSON response containing `results[0]` with a
+            `historicalDataPrice` field (list of objects with 'close') and
+            dividend data.
 
     Returns:
-        dict: dicionário com métricas calculadas, incluindo dividend_yield.
+        dict: dictionary with computed metrics, including dividend_yield.
     """
-    # Extrai preços de fechamento da primeira ação retornada
+    # Extract the first returned stock
     try:
         result0 = data_json["results"][0]
     except (KeyError, IndexError):
-        raise ValueError("Formato inesperado de dados da brapi.dev: campo 'results[0]' ausente")
+        raise ValueError("Unexpected brapi.dev data format: 'results[0]' field missing")
 
     import os as _os
     if _os.getenv("DEBUG_METRICS") == "1":
         print(data_json)
-    
-    # Calcula dividend yield (métrica principal para analista de dividendos)
+
+    # Compute dividend yield (main metric for a dividend analyst)
     dividend_yield = _calculate_dividend_yield(result0)
-    
-    # Calcula preço atual e informações básicas
+
+    # Compute current price and basic info
     current_price = result0.get("regularMarketPrice", 0.0)
     ticker = result0.get("symbol", "N/A")
     company_name = result0.get("shortName", "N/A")
-    
-    # Calcula total de dividendos dos últimos 12 meses
+
+    # Compute total dividends over the last 12 months
     from datetime import timezone
-    
+
     dividends = _extract_dividends(result0)
     now = datetime.now(timezone.utc)
     one_year_ago = now - timedelta(days=365)
-    
+
     total_dividends_12m = 0.0
     dividend_count = 0
-    
+
     for div in dividends:
         payment_date_str = div.get("paymentDate")
         if not payment_date_str:
             continue
-            
+
         try:
             payment_date = datetime.fromisoformat(payment_date_str.replace("Z", "+00:00"))
             if payment_date >= one_year_ago and payment_date <= now:
@@ -141,30 +139,30 @@ def calc_metrics_from_raw(data_json: Dict[str, Any]) -> Dict[str, float]:
                     dividend_count += 1
         except Exception:
             continue
-    
+
     return {
         "dividend_yield": dividend_yield,
-        "preco_atual": float(current_price),
-        "dividendos_12m": round(total_dividends_12m, 2),
-        "quantidade_pagamentos": float(dividend_count),
+        "current_price": float(current_price),
+        "dividends_12m": round(total_dividends_12m, 2),
+        "payment_count": float(dividend_count),
     }
 
 
-def store_metrics_in_cache(ticker: str, periodo: str, metrics: Dict[str, float], ttl: int = 86400) -> None:
-    """Armazena métricas no Redis para uso futuro.
+def store_metrics_in_cache(ticker: str, period: str, metrics: Dict[str, float], ttl: int = 86400) -> None:
+    """Store metrics in Redis for future use.
 
     Args:
-        ticker (str): código do ativo.
-        periodo (str): intervalo analisado.
-        metrics (dict): dicionário com métricas calculadas.
-        ttl (int): tempo de vida em segundos (default 24h).
+        ticker (str): asset code.
+        period (str): analyzed range.
+        metrics (dict): dictionary with computed metrics.
+        ttl (int): time to live in seconds (default 24h).
     """
     import json
     r = get_redis_connection()
-    key = f"metrics:{ticker}:{periodo}"
+    key = f"metrics:{ticker}:{period}"
     r.set(key, json.dumps(metrics), ex=ttl)
 
 
-def enqueue_metrics_calculation(ticker: str, periodo: str) -> None:
-    """Mantido por compatibilidade: não faz nada no fluxo síncrono."""
+def enqueue_metrics_calculation(ticker: str, period: str) -> None:
+    """Kept for compatibility: does nothing in the synchronous flow."""
     return None

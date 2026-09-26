@@ -1,1 +1,1 @@
-"""Subpacote com utilitários de cache, mensageria, LLM e banco vetorial."""
+"""Subpackage with cache, messaging, LLM and vector-database utilities."""
