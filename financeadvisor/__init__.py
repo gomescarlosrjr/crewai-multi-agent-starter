@@ -1,0 +1,1 @@
+"""Pacote raíz para o sistema multiagente de análise financeira."""
